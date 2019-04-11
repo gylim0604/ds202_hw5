@@ -1,0 +1,85 @@
+---
+title: 'Homework #5'
+author: "Guang Yi Lim"
+date: "4/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+## Liquor Sales in Iowa
+
+This dataset https://data.iowa.gov/Economy/Iowa-Liquor-Sales/m3tr-qhgy contains the spirits purchase information of Iowa Class “E” liquor licensees by product and date of purchase from January 1, 2012 to current. The dataset can be used to analyze total spirits sales in Iowa of individual products at the store level.
+
+**Submission instructions**: Create a folder named `ds202_hw5`, and name the RMarkDown file including your solutions `hw5.Rmd` under this folder. For the submission, create a GitHub repository named `ds202_hw5` under your GitHub account, and push both `hw5.Rmd` and the knitted `hw5.html` before the deadline. I will assume you use the same GitHub username as for your HW4 submission. The latest version of your homework appearing on GitHub before the deadline is graded. *It is crucial to follow the exact folder structure and file names*, so that your homework can be reproduced and graded by an automated script. This homework is **due on April 11** before class.
+
+1. The code below downloads the data for Ames only and saves a local copy to your machine. The first time you run this code, make sure you have a good internet connection and enough space on your machine (~50 MB). If the local copy exists, re-knitting the file will load the (binary) file from disk and be much faster. 
+```{r, cache=TRUE}
+
+if (file.exists("alcohol.rds")) {
+  data <- readRDS("alcohol.rds")
+} else {
+  url <- "https://xdaiisu.github.io/ds202materials/data/ames.csv"
+  data <- readr::read_csv(url)
+  saveRDS(data, file="alcohol.rds")
+} 
+
+```
+2. Data cleaning: 
+  - extract geographic latitude and longitude from the variable `Store Location`
+  - check variable types. Pick five variables that need to be converted to a different type and fix those. 
+  - extract year, month and day from the variable `Date`
+```{r}
+temp <- data
+temp <- data %>% separate (`Store Location`,into =c("Location","Temp"),sep = "([\\(\\)])") %>%
+  separate(Temp, into = c("Latitude","Longitude"),sep = ", ") %>%
+  drop_na()
+str(temp)
+temp$Latitude <- as.numeric(temp$Latitude)
+temp$Longitude <- as.numeric(temp$Longitude)
+temp$`Vendor Number` <-as.numeric(temp$`Vendor Number`)
+temp$Date <- mdy(temp$Date)
+temp$Month <- as.numeric(format(temp$Date,format ="%m"))
+temp$Year <- as.numeric(format(temp$Date , format = "%Y"))
+temp$Day <- as.numeric(format(temp$Date,format ="%d"))
+temp$`Category Name` <- as.factor(temp$`Category Name`)
+```
+<br/>
+3. First overview:
+  - Plot a scatterplot of lat and long of store locations. 
+```{r}
+location <- temp %>% distinct(`Store Number`,`Latitude`,`Longitude`,`Store Name`)
+location <- location %>% distinct(`Store Number`,.keep_all = TRUE)
+p<-ggplot(location,aes(x= Latitude,y= Longitude,color = `Store Name`))+geom_point() +xlab("Latitude") +ylab("Longitude") + ggtitle("Store Location based on Latitude and Longitude")
+p+ theme(legend.position = 'none')
+```
+<br/>
+  - Provide a visual breakdown of the liquor category (by `Category Name`). Include volume sold in the breakdown.
+```{r}
+liquor <- temp%>%group_by(`Category Name`) %>% summarize(total= (sum(`Volume Sold (Liters)`)/1000)) %>% arrange(desc(total))
+p<- ggplot(liquor[1:10,],aes(x = reorder(`Category Name`,-total),y = `total`,fill = `Category Name`)) +
+  geom_bar(stat= 'identity') +xlab("Liquor Name")+ggtitle("Top 10 best selling liquor") +ylab("Total Sales")
+p +scale_x_discrete(labels = abbreviate) +theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+<br/>4. Find the daily sales liquor sales in Ames in 2018. Summarize number of sales, volume of liquor sold and amount of money spent. Plot volume sold by day (use a scatterplot of volume by day and facet by month). Describe any patterns.
+Find the dates for ISU football home games in Fall 2018. Can you see a pattern? 
+```{r}
+y2018 <- temp %>% filter(temp$Year == "2018")
+y2018 <- y2018 %>% group_by(`Month`,`Day`) %>% summarize(sales = (sum (`Bottles Sold`)),`Volume sold` = (sum(`Volume Sold (Liters)`)),`Cost`= (sum(`Sale (Dollars)`)))
+ggplot(y2018,aes(x= Day,y = `Cost`))+geom_point()+facet_wrap(~Month,scales  = "free_y")
+```
+<br/>
+The highest cost seems to happen in a weekly interval. I thought that it would be the weekends but surprisingly found out that it happens on wednesdays. 
+Iowa State Home Games : 9/1/2018 9/15/2018 10/13/2018 10/27/2018 11/10/2018 11/24/2018 12/1/201
+Unfortunately we do not have the data for ISU home games so no pattern can be concluded.
+
+Note: your submission is supposed to be fully reproducible, i.e. the TA and I will 'knit' your submission in RStudio. 
+
+
+For the submission: submit your solution in an R Markdown file and (just for insurance) submit the corresponding html (or Word) file with it. 
